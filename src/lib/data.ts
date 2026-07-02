@@ -219,6 +219,57 @@ export async function createPlan(userId: string, input: PlanInput) {
   });
 }
 
+// ---------- Progress photos ----------
+
+export const photoInputSchema = z.object({
+  takenAt: z.coerce.date().optional(),
+  fileUrl: z.string().min(1).max(1000),
+  note: z.string().max(1000).nullish(),
+  weightKg: z.coerce.number().positive().max(500).nullish(),
+});
+export type PhotoInput = z.input<typeof photoInputSchema>;
+
+export async function createProgressPhoto(userId: string, input: PhotoInput) {
+  const data = photoInputSchema.parse(input);
+  return prisma.progressPhoto.create({
+    data: {
+      userId,
+      takenAt: data.takenAt ?? new Date(),
+      fileUrl: data.fileUrl,
+      note: data.note ?? null,
+      weightKg: data.weightKg ?? null,
+    },
+  });
+}
+
+export async function deleteProgressPhoto(userId: string, id: string) {
+  return (await prisma.progressPhoto.deleteMany({ where: { id, userId } })).count > 0;
+}
+
+// ---------- Goal + plan management ----------
+
+export async function deactivateGoal(userId: string, id: string) {
+  return (
+    (await prisma.goal.updateMany({ where: { id, userId }, data: { active: false } })).count > 0
+  );
+}
+
+export async function getActivePlan(userId: string) {
+  return prisma.plan.findFirst({
+    where: { userId, active: true },
+    include: { items: { orderBy: [{ week: "asc" }, { dayOfWeek: "asc" }] }, goal: true },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function setPlanItemCompleted(userId: string, itemId: string, completed: boolean) {
+  const result = await prisma.planItem.updateMany({
+    where: { id: itemId, plan: { userId } },
+    data: { completedAt: completed ? new Date() : null },
+  });
+  return result.count > 0;
+}
+
 // ---------- Listing & deleting ----------
 
 export const ENTRY_TYPES = ["weight", "run", "meal", "workout"] as const;

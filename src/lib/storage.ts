@@ -41,7 +41,7 @@ export async function putImage(
     return blob.url;
   }
 
-  const name = `${keyHint}-${randomBytes(8).toString("hex")}.${ext}`;
+  const name = `${keyHint.replaceAll("/", "-")}-${randomBytes(8).toString("hex")}.${ext}`;
   await mkdir(LOCAL_DIR, { recursive: true });
   await writeFile(path.join(LOCAL_DIR, name), buffer);
   return `/api/files/${name}`;
