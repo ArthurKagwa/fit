@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+
+  conversations  Conversation[]
+  runs           Run[]
+  workouts       Workout[]
+  weightEntries  WeightEntry[]
+  meals          Meal[]
+  progressPhotos ProgressPhoto[]
+  goals          Goal[]
+  plans          Plan[]
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // "user" | "assistant"
+  content        String
+  toolCalls      Json? // audit trail of tool calls made while producing this message
+  imageUrl       String?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Run {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date          DateTime
+  distanceKm    Float
+  durationSec   Int
+  paceSecPerKm  Int?
+  source        String   @default("manual") // "manual" | "screenshot" | "chat"
+  notes         String?
+  screenshotUrl String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+model Workout {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  type      String // "strength" | "cardio" | "mobility" | "sport" | "other"
+  title     String
+  notes     String?
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  exercises WorkoutExercise[]
+
+  @@index([userId, date])
+}
+
+model WorkoutExercise {
+  id        String  @id @default(cuid())
+  workoutId String
+  workout   Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  name      String
+  sets      Int?
+  reps      Int?
+  weightKg  Float?
+  order     Int     @default(0)
+}
+
+model WeightEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  weightKg  Float
+  note      String?
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+model Meal {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  mealType    String // "breakfast" | "lunch" | "dinner" | "snack"
+  description String
+  calories    Int?
+  proteinG    Float?
+  carbsG      Float?
+  fatG        Float?
+  photoUrl    String?
+  source      String   @default("manual") // "manual" | "photo" | "chat"
+  createdAt   DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+model ProgressPhoto {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  takenAt   DateTime
+  fileUrl   String
+  note      String?
+  weightKg  Float?
+  createdAt DateTime @default(now())
+
+  @@index([userId, takenAt])
+}
+
+model Goal {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String // TARGET_WEIGHT | WEEKLY_DISTANCE | PACE_5K | DAILY_CALORIES | CUSTOM
+  targetValue Float
+  unit        String
+  targetDate  DateTime?
+  description String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  plans Plan[]
+
+  @@index([userId, active])
+}
+
+model Plan {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  goalId    String?
+  goal      Goal?    @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  startDate DateTime
+  weeks     Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  items PlanItem[]
+
+  @@index([userId, active])
+}
+
+model PlanItem {
+  id          String    @id @default(cuid())
+  planId      String
+  plan        Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  week        Int // 1-based week number
+  dayOfWeek   Int // 1 = Monday ... 7 = Sunday
+  activity    String
+  detail      String?
+  completedAt DateTime?
+
+  @@index([planId, week])
+}
