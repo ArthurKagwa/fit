@@ -80,3 +80,34 @@ Convert units: miles -> km (x1.60934), pace min/mi -> sec/km. "Moving time" beat
   const parsed = runExtractionSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
+
+export const chatImageSchema = z.object({
+  kind: z.enum(["meal", "run_screenshot", "other"]),
+  summary: z.string().max(500),
+  meal: mealEstimateSchema.nullish(),
+  run: runExtractionSchema.nullish(),
+});
+export type ChatImageAnalysis = z.infer<typeof chatImageSchema>;
+
+/**
+ * Classify-and-extract for images sent in chat. Runs on the cheap
+ * tier so the (pricier) chat model never has to consume image tokens
+ * — it receives the structured result as text instead.
+ */
+export async function analyzeChatImage({ imageDataUrl, caption }: ImageInput): Promise<ChatImageAnalysis | null> {
+  if (!imageDataUrl) return null;
+  const system = `You analyze photos sent to a fitness-tracking chat. Classify the image and extract data.
+Reply with ONLY a JSON object, no prose:
+{"kind": "meal"|"run_screenshot"|"other", "summary": "one sentence describing the image",
+ "meal": <only when kind=meal> {"description": "...", "items": [...], "calories": <int>, "proteinG": <n>, "carbsG": <n>, "fatG": <n>, "mealType": "breakfast"|"lunch"|"dinner"|"snack"|null, "confidence": "low"|"medium"|"high"},
+ "run": <only when kind=run_screenshot> {"distanceKm": <n|null>, "durationSec": <int|null>, "paceSecPerKm": <int|null>, "date": "YYYY-MM-DD"|null, "confidence": "low"|"medium"|"high"}}
+run_screenshot = screenshots of running/fitness apps or watches (Strava, Garmin, Nike Run Club, treadmill...). Convert miles to km. "Moving time" beats "elapsed time". For meals, estimate portions realistically; use the caption to correct what you see.`;
+
+  const content: Parameters<typeof completeJson>[1] = [];
+  if (caption?.trim()) content.push({ type: "text", text: `Caption: ${caption.trim()}` });
+  content.push({ type: "image_url", image_url: { url: imageDataUrl } });
+
+  const raw = await completeJson(system, content, 700);
+  const parsed = chatImageSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
