@@ -255,11 +255,18 @@ export async function deactivateGoal(userId: string, id: string) {
 }
 
 export async function getActivePlan(userId: string) {
-  return prisma.plan.findFirst({
+  const plan = await prisma.plan.findFirst({
     where: { userId, active: true },
     include: { items: { orderBy: [{ week: "asc" }, { dayOfWeek: "asc" }] }, goal: true },
     orderBy: { createdAt: "desc" },
   });
+  if (!plan) return null;
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  const currentWeek = Math.min(
+    plan.weeks,
+    Math.max(1, Math.floor((Date.now() - plan.startDate.getTime()) / WEEK_MS) + 1)
+  );
+  return { ...plan, currentWeek };
 }
 
 export async function setPlanItemCompleted(userId: string, itemId: string, completed: boolean) {

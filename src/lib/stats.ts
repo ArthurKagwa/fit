@@ -50,6 +50,7 @@ export type StatsSummary = {
   };
   training: {
     workoutsThisWeek: number;
+    workoutsLastWeek: number;
     runsThisWeek: number;
     streakDays: number;
   };
@@ -73,7 +74,8 @@ export async function getStatsSummary(userId: string): Promise<StatsSummary> {
   const since14 = startOfDay(new Date(now.getTime() - 13 * DAY));
   const since60 = new Date(now.getTime() - 60 * DAY);
 
-  const [weights, runs, meals14, workoutsWeek, goals, recentDates] = await Promise.all([
+  const [weights, runs, meals14, workoutsWeek, workoutsLastWeek, goals, recentDates] =
+    await Promise.all([
     prisma.weightEntry.findMany({
       where: { userId, date: { gte: since90 } },
       orderBy: { date: "asc" },
@@ -87,6 +89,9 @@ export async function getStatsSummary(userId: string): Promise<StatsSummary> {
       orderBy: { date: "asc" },
     }),
     prisma.workout.count({ where: { userId, date: { gte: weekStart } } }),
+    prisma.workout.count({
+      where: { userId, date: { gte: new Date(weekStart.getTime() - 7 * DAY), lt: weekStart } },
+    }),
     prisma.goal.findMany({
       where: { userId, active: true },
       orderBy: { createdAt: "asc" },
@@ -247,6 +252,7 @@ export async function getStatsSummary(userId: string): Promise<StatsSummary> {
     },
     training: {
       workoutsThisWeek: workoutsWeek,
+      workoutsLastWeek,
       runsThisWeek: runsThisWeek.length,
       streakDays,
     },

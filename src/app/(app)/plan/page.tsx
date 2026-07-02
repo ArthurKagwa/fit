@@ -14,8 +14,6 @@ export const metadata = { title: "Training plan" };
 
 const dayNames = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const DAY = 24 * 60 * 60 * 1000;
-
 export default async function PlanPage() {
   const userId = await getUserId();
   if (!userId) redirect("/login");
@@ -41,10 +39,7 @@ export default async function PlanPage() {
 
   const total = plan.items.length;
   const done = plan.items.filter((i) => i.completedAt).length;
-  const currentWeek = Math.min(
-    plan.weeks,
-    Math.max(1, Math.floor((Date.now() - plan.startDate.getTime()) / (7 * DAY)) + 1)
-  );
+  const currentWeek = plan.currentWeek;
 
   const weeks = Array.from({ length: plan.weeks }, (_, i) => i + 1).map((week) => ({
     week,

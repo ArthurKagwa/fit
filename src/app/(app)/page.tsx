@@ -10,11 +10,13 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { auth } from "@/auth";
+import { aiEnabled } from "@/lib/ai/client";
 import { getStatsSummary } from "@/lib/stats";
 import { formatPace } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { KpiTile } from "@/components/KpiTile";
+import { WeeklySummaryCard } from "@/components/WeeklySummaryCard";
 import { EmptyState } from "@/components/EmptyState";
 import { WeightChart } from "@/components/charts/WeightChart";
 import { WeeklyDistanceChart } from "@/components/charts/WeeklyDistanceChart";
@@ -90,6 +92,14 @@ export default async function DashboardPage() {
               sub={stats.calories.targetKcal ? `of ${stats.calories.targetKcal} target` : null}
             />
           </div>
+
+          <WeeklySummaryCard
+            kmThisWeek={stats.running.thisWeekKm}
+            kmLastWeek={stats.running.weekly.at(-2)?.km ?? 0}
+            workoutsThisWeek={stats.training.workoutsThisWeek}
+            workoutsLastWeek={stats.training.workoutsLastWeek}
+            aiEnabled={aiEnabled()}
+          />
 
           {stats.goals.length > 0 && (
             <Card>
