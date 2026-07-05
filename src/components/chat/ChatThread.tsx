@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/sheet";
 import { EmptyState } from "@/components/EmptyState";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
+import { CopyMessageButton } from "@/components/chat/CopyMessageButton";
 import { compressImage } from "@/lib/image-client";
 import { cn } from "@/lib/utils";
 
@@ -198,7 +199,10 @@ export function ChatThread({
             {messages.map((m) => (
               <div
                 key={m.id}
-                className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
+                className={cn(
+                  "flex flex-col gap-0.5",
+                  m.role === "user" ? "items-end" : "items-start"
+                )}
               >
                 <div
                   className={cn(
@@ -218,6 +222,9 @@ export function ChatThread({
                   )}
                   {m.role === "assistant" ? <ChatMarkdown content={m.content} /> : m.content}
                 </div>
+                {m.content && (
+                  <CopyMessageButton text={m.content} className={m.role === "user" ? "mr-1" : "ml-1"} />
+                )}
               </div>
             ))}
             {sending && (
