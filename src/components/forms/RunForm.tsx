@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Footprints, ImageUp, Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -28,7 +28,8 @@ export function RunForm({ aiEnabled }: { aiEnabled: boolean }) {
 
   const [distanceKm, setDistanceKm] = useState("");
   const [duration, setDuration] = useState("");
-  const [date, setDate] = useState(toDateInputValue());
+  const [date, setDate] = useState("");
+  useEffect(() => setDate(toDateInputValue()), []);
   const [notes, setNotes] = useState("");
 
   function onPickFile(picked: File | null) {

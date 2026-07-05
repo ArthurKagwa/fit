@@ -6,14 +6,85 @@ import OpenAI from "openai";
  * reserved for coaching chat where quality matters.
  */
 
+/**
+ * Model fleets, ordered by preference. Free OpenRouter models are shared and
+ * frequently rate-limited (429) upstream, so each tier is a list: we pass the
+ * whole list to OpenRouter's `models` param and it auto-falls-back to the next
+ * one when the primary is throttled or unavailable. An env override, if set,
+ * is tried first.
+ *
+ * chat    — needs tool/function calling.
+ * extract — needs vision (meal photos, run screenshots).
+ */
+const CHAT_FLEET = [
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "qwen/qwen3-next-80b-a3b-instruct:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "openai/gpt-oss-120b:free",
+];
+
+const EXTRACT_FLEET = [
+  "google/gemma-4-31b-it:free",
+  "nvidia/nemotron-nano-12b-v2-vl:free",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+];
+
+// Light text-only tasks (weekly recap). Small/fast free models, no vision needed.
+const LIGHT_FLEET = [
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "qwen/qwen3-next-80b-a3b-instruct:free",
+  "google/gemma-4-31b-it:free",
+];
+
+function fleet(envValue: string | undefined, defaults: string[]): string[] {
+  const override = envValue?.trim();
+  if (!override) return defaults;
+  // Prepend the override, drop any duplicate of it from the defaults.
+  return [override, ...defaults.filter((m) => m !== override)];
+}
+
 export const MODELS = {
-  chat: process.env.MODEL_CHAT ?? "anthropic/claude-sonnet-4.5",
-  extract: process.env.MODEL_EXTRACT ?? "google/gemini-2.5-flash",
-  light: process.env.MODEL_LIGHT ?? "google/gemini-2.5-flash-lite",
+  chat: fleet(process.env.MODEL_CHAT, CHAT_FLEET),
+  extract: fleet(process.env.MODEL_EXTRACT, EXTRACT_FLEET),
+  light: fleet(process.env.MODEL_LIGHT, LIGHT_FLEET),
 } as const;
 
 export function aiEnabled(): boolean {
   return Boolean(process.env.OPENROUTER_API_KEY);
+}
+
+/**
+ * Builds the model routing fields for an OpenRouter request from a fleet.
+ * `model` (first entry) keeps the OpenAI SDK types happy; `models` is the
+ * OpenRouter-specific fallback list it routes through on error/rate-limit.
+ * OpenRouter caps `models` at 3 entries, so we send at most the top 3.
+ *
+ * `reasoning: { exclude: true }` lets reasoning-capable models still think
+ * internally but keeps their chain-of-thought OUT of the response content —
+ * otherwise some free models dump their thoughts into `message.content`.
+ * See https://openrouter.ai/docs/features/model-routing
+ *     https://openrouter.ai/docs/use-cases/reasoning-tokens
+ */
+export function fleetRouting(models: readonly string[]): {
+  model: string;
+  models: string[];
+  reasoning: { exclude: true };
+} {
+  const top = models.slice(0, 3);
+  return { model: top[0], models: top, reasoning: { exclude: true } };
+}
+
+/**
+ * Strips leaked chain-of-thought from a model reply. `reasoning.exclude` handles
+ * providers that expose reasoning on a separate channel; this is the belt-and-
+ * braces for models that inline `<think>…</think>` (or similar) into content.
+ */
+export function stripReasoning(text: string): string {
+  return text
+    .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "")
+    // An unclosed opening tag (truncated mid-thought) — drop everything after it.
+    .replace(/<think(?:ing)?>[\s\S]*$/gi, "")
+    .trim();
 }
 
 let client: OpenAI | null = null;
@@ -24,7 +95,7 @@ export function getAiClient(): OpenAI {
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY,
     defaultHeaders: {
-      "X-Title": "Fit — personal fitness tracker",
+      "X-Title": "Fit - personal fitness tracker",
     },
   });
   return client;

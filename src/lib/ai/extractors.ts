@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MODELS, extractJson, getAiClient } from "@/lib/ai/client";
+import { MODELS, extractJson, fleetRouting, getAiClient, stripReasoning } from "@/lib/ai/client";
 
 /**
  * Single-shot vision extraction on the cheap model tier.
@@ -38,15 +38,16 @@ async function completeJson(
 ): Promise<unknown> {
   const client = getAiClient();
   const response = await client.chat.completions.create({
-    model: MODELS.extract,
+    ...fleetRouting(MODELS.extract),
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: system },
       { role: "user", content: userContent },
     ],
   });
-  const text = response.choices[0]?.message?.content ?? "";
-  return extractJson(text);
+  // OpenRouter may return an error body (no `choices`) when all models fail.
+  const text = response.choices?.[0]?.message?.content ?? "";
+  return extractJson(stripReasoning(text));
 }
 
 export async function analyzeMeal({ imageDataUrl, caption }: ImageInput): Promise<MealEstimate | null> {

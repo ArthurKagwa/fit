@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Loader2, Sparkles, UtensilsCrossed, X } from "lucide-react";
 import { toast } from "sonner";
@@ -35,7 +35,8 @@ export function MealForm({ aiEnabled }: { aiEnabled: boolean }) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   const [mealType, setMealType] = useState("lunch");
-  const [date, setDate] = useState(toDateInputValue());
+  const [date, setDate] = useState("");
+  useEffect(() => setDate(toDateInputValue()), []);
   const [description, setDescription] = useState("");
   const [calories, setCalories] = useState("");
   const [proteinG, setProteinG] = useState("");

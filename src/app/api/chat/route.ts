@@ -1,8 +1,20 @@
 import type OpenAI from "openai";
 import { requireUserId } from "@/lib/session";
-import { prisma } from "@/lib/db";
+import {
+  appendMessage,
+  createConversation,
+  getConversation,
+  getMessages,
+} from "@/lib/chat-store";
 import { auth } from "@/auth";
-import { MODELS, aiEnabled, aiUnconfiguredResponse, getAiClient } from "@/lib/ai/client";
+import {
+  MODELS,
+  aiEnabled,
+  aiUnconfiguredResponse,
+  fleetRouting,
+  getAiClient,
+  stripReasoning,
+} from "@/lib/ai/client";
 import { analyzeChatImage } from "@/lib/ai/extractors";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { executeTool, toolDefinitions, type SavedEntry } from "@/lib/ai/tools";
@@ -47,31 +59,22 @@ export async function POST(request: Request) {
     }
 
     // Find or create the conversation (always scoped to the user)
-    const conversation = conversationId
-      ? await prisma.conversation.findFirst({ where: { id: conversationId, userId } })
-      : await prisma.conversation.create({
-          data: { userId, title: (text || "Photo").slice(0, 60) },
-        });
-    if (!conversation) {
-      return Response.json({ error: "conversation not found" }, { status: 404 });
+    let convId: string;
+    if (conversationId) {
+      const existing = await getConversation(conversationId, userId);
+      if (!existing) {
+        return Response.json({ error: "conversation not found" }, { status: 404 });
+      }
+      convId = existing._id.toHexString();
+    } else {
+      convId = await createConversation(userId, (text || "Photo").slice(0, 60));
     }
 
-    await prisma.chatMessage.create({
-      data: {
-        conversationId: conversation.id,
-        role: "user",
-        content: text,
-        imageUrl,
-      },
-    });
+    await appendMessage(convId, { role: "user", content: text, imageUrl });
 
     // Build model messages from persisted history (text only — images
     // are represented by their analysis blocks, keeping chat-tier cheap)
-    const history = await prisma.chatMessage.findMany({
-      where: { conversationId: conversation.id },
-      orderBy: { createdAt: "asc" },
-      take: 200,
-    });
+    const history = await getMessages(convId, userId, 200);
     const recent = history.slice(-MAX_HISTORY_MESSAGES);
 
     const session = await auth();
@@ -102,18 +105,30 @@ export async function POST(request: Request) {
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       const response = await client.chat.completions.create({
-        model: MODELS.chat,
+        ...fleetRouting(MODELS.chat),
         max_tokens: 1500,
         messages,
         tools: toolDefinitions,
       });
+
+      // OpenRouter can return a 200 whose body is an error object (no `choices`)
+      // when every fallback model fails (e.g. all rate-limited). Surface it
+      // instead of crashing on `response.choices[0]`.
+      const apiError = (response as { error?: { message?: string } }).error;
+      if (apiError || !response.choices?.length) {
+        console.error("chat model error", apiError ?? response);
+        return Response.json(
+          { error: "model_unavailable", message: apiError?.message ?? "No model available." },
+          { status: 502 }
+        );
+      }
 
       const choice = response.choices[0];
       const message = choice?.message;
       if (!message) break;
 
       if (!message.tool_calls?.length) {
-        finalText = message.content ?? "";
+        finalText = stripReasoning(message.content ?? "");
         break;
       }
 
@@ -147,22 +162,15 @@ export async function POST(request: Request) {
           : "Sorry — I could not finish that. Try rephrasing?";
     }
 
-    const assistantMessage = await prisma.chatMessage.create({
-      data: {
-        conversationId: conversation.id,
-        role: "assistant",
-        content: finalText,
-        toolCalls: toolAudit.length ? JSON.parse(JSON.stringify(toolAudit)) : undefined,
-      },
-    });
-
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { updatedAt: new Date() },
+    // appendMessage also bumps the conversation's updatedAt.
+    const assistantMessage = await appendMessage(convId, {
+      role: "assistant",
+      content: finalText,
+      toolCalls: toolAudit.length ? toolAudit : undefined,
     });
 
     return Response.json({
-      conversationId: conversation.id,
+      conversationId: convId,
       message: {
         id: assistantMessage.id,
         role: "assistant",

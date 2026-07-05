@@ -14,7 +14,6 @@ model User {
   name         String?
   createdAt    DateTime @default(now())
 
-  conversations  Conversation[]
   runs           Run[]
   workouts       Workout[]
   weightEntries  WeightEntry[]
@@ -24,31 +23,8 @@ model User {
   plans          Plan[]
 }
 
-model Conversation {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  messages ChatMessage[]
-
-  @@index([userId, updatedAt])
-}
-
-model ChatMessage {
-  id             String       @id @default(cuid())
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String // "user" | "assistant"
-  content        String
-  toolCalls      Json? // audit trail of tool calls made while producing this message
-  imageUrl       String?
-  createdAt      DateTime     @default(now())
-
-  @@index([conversationId, createdAt])
-}
+// NOTE: Chat conversations + messages are persisted in MongoDB (see
+// src/lib/chat-store.ts), not Postgres. Only structured fitness data lives here.
 
 model Run {
   id            String   @id @default(cuid())
