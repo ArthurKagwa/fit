@@ -13,6 +13,7 @@ import {
   aiUnconfiguredResponse,
   fleetRouting,
   getAiClient,
+  looksGarbled,
   stripReasoning,
 } from "@/lib/ai/client";
 import { analyzeChatImage } from "@/lib/ai/extractors";
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
     const toolAudit: { name: string; args: unknown; ok: boolean }[] = [];
     let finalText = "";
 
-    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    async function chatOnce() {
       const response = await client.chat.completions.create({
         ...fleetRouting(MODELS.chat),
         // Safety ceiling, not the enforcement mechanism — the persona asks for ~500
@@ -120,18 +121,42 @@ export async function POST(request: Request) {
       const apiError = (response as { error?: { message?: string } }).error;
       if (apiError || !response.choices?.length) {
         console.error("chat model error", apiError ?? response);
+        return { error: apiError?.message ?? "No model available." } as const;
+      }
+      return { message: response.choices[0]?.message } as const;
+    }
+
+    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+      const result = await chatOnce();
+      if ("error" in result) {
         return Response.json(
-          { error: "model_unavailable", message: apiError?.message ?? "No model available." },
+          { error: "model_unavailable", message: result.error },
           { status: 502 }
         );
       }
 
-      const choice = response.choices[0];
-      const message = choice?.message;
+      const message = result.message;
       if (!message) break;
 
       if (!message.tool_calls?.length) {
-        finalText = stripReasoning(message.content ?? "");
+        let text = stripReasoning(message.content ?? "");
+        if (looksGarbled(text)) {
+          // Free models occasionally degrade into mixed-script gibberish — one
+          // retry usually gets a coherent reply; never show garbage to the user.
+          console.error("chat model produced garbled output, retrying", {
+            preview: text.slice(0, 200),
+          });
+          const retry = await chatOnce();
+          const retryText =
+            "message" in retry && retry.message
+              ? stripReasoning(retry.message.content ?? "")
+              : "";
+          text =
+            retryText && !looksGarbled(retryText)
+              ? retryText
+              : "Sorry — that came out garbled on my end. Could you try asking again?";
+        }
+        finalText = text;
         break;
       }
 

@@ -96,6 +96,36 @@ export function stripReasoning(text: string): string {
     .trim();
 }
 
+/**
+ * Detects garbled/corrupted free-model output: a degenerate generation that
+ * mixes several unrelated scripts (Latin + Cyrillic + CJK + Hangul + Arabic in
+ * one short reply) or is mostly not real word-shaped tokens. A reply that's
+ * legitimately in one non-Latin language, or has an occasional loanword/emoji,
+ * won't trip this — it looks for the *mixing*, not any one script.
+ */
+export function looksGarbled(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 20) return false;
+
+  const scripts = new Set<string>();
+  for (const ch of trimmed) {
+    const cp = ch.codePointAt(0) ?? 0;
+    if (cp < 0x80) continue;
+    if (cp >= 0x0370 && cp <= 0x03ff) scripts.add("greek");
+    else if (cp >= 0x0400 && cp <= 0x04ff) scripts.add("cyrillic");
+    else if (cp >= 0x0590 && cp <= 0x05ff) scripts.add("hebrew");
+    else if (cp >= 0x0600 && cp <= 0x06ff) scripts.add("arabic");
+    else if (cp >= 0x0900 && cp <= 0x097f) scripts.add("devanagari");
+    else if (cp >= 0x0e00 && cp <= 0x0e7f) scripts.add("thai");
+    // Kana and CJK ideographs are bucketed together — ordinary Japanese
+    // text mixes kanji and kana in nearly every sentence, so treating them
+    // as separate "scripts" would flag legitimate Japanese as garbled.
+    else if ((cp >= 0x3040 && cp <= 0x30ff) || (cp >= 0x3400 && cp <= 0x9fff)) scripts.add("cjk");
+    else if (cp >= 0xac00 && cp <= 0xd7a3) scripts.add("hangul");
+  }
+  return scripts.size >= 2;
+}
+
 let client: OpenAI | null = null;
 
 export function getAiClient(): OpenAI {
