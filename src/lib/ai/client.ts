@@ -77,13 +77,22 @@ export function fleetRouting(models: readonly string[]): {
 /**
  * Strips leaked chain-of-thought from a model reply. `reasoning.exclude` handles
  * providers that expose reasoning on a separate channel; this is the belt-and-
- * braces for models that inline `<think>…</think>` (or similar) into content.
+ * braces for free models that inline their thoughts into content using various
+ * tags/markers instead of respecting that param.
  */
+const THOUGHT_TAGS = ["think", "thinking", "reflection", "reasoning", "scratchpad"];
+
 export function stripReasoning(text: string): string {
-  return text
-    .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "")
-    // An unclosed opening tag (truncated mid-thought) — drop everything after it.
-    .replace(/<think(?:ing)?>[\s\S]*$/gi, "")
+  let out = text;
+  for (const tag of THOUGHT_TAGS) {
+    out = out
+      .replace(new RegExp(`<${tag}>[\\s\\S]*?<\\/${tag}>`, "gi"), "")
+      // An unclosed opening tag (truncated mid-thought) — drop everything after it.
+      .replace(new RegExp(`<${tag}>[\\s\\S]*$`, "gi"), "");
+  }
+  return out
+    .replace(/<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>/gi, "")
+    .replace(/◁think▷[\s\S]*?◁\/think▷/gi, "")
     .trim();
 }
 

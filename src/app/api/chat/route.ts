@@ -106,7 +106,10 @@ export async function POST(request: Request) {
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       const response = await client.chat.completions.create({
         ...fleetRouting(MODELS.chat),
-        max_tokens: 1500,
+        // Safety ceiling, not the enforcement mechanism — the persona asks for ~500
+        // words, but markdown/table/emoji overhead eats tokens faster than prose, so
+        // this is set well above that to avoid truncating mid-sentence.
+        max_tokens: 1400,
         messages,
         tools: toolDefinitions,
       });

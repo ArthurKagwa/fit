@@ -24,6 +24,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { EmptyState } from "@/components/EmptyState";
+import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 import { compressImage } from "@/lib/image-client";
 import { cn } from "@/lib/utils";
 
@@ -201,9 +202,9 @@ export function ChatThread({
               >
                 <div
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap",
+                    "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm",
                     m.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-br-md"
+                      ? "bg-primary text-primary-foreground rounded-br-md whitespace-pre-wrap"
                       : "bg-card rounded-bl-md border"
                   )}
                 >
@@ -215,7 +216,7 @@ export function ChatThread({
                       className="mb-2 max-h-48 rounded-lg object-cover"
                     />
                   )}
-                  {m.content}
+                  {m.role === "assistant" ? <ChatMarkdown content={m.content} /> : m.content}
                 </div>
               </div>
             ))}
