@@ -14,6 +14,7 @@ import {
   fleetRouting,
   getAiClient,
   looksGarbled,
+  looksLikeReasoning,
   stripReasoning,
 } from "@/lib/ai/client";
 import { analyzeChatImage } from "@/lib/ai/extractors";
@@ -126,6 +127,8 @@ export async function POST(request: Request) {
       return { message: response.choices[0]?.message } as const;
     }
 
+    let badReplyRetries = 0;
+
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       const result = await chatOnce();
       if ("error" in result) {
@@ -139,22 +142,22 @@ export async function POST(request: Request) {
       if (!message) break;
 
       if (!message.tool_calls?.length) {
-        let text = stripReasoning(message.content ?? "");
-        if (looksGarbled(text)) {
-          // Free models occasionally degrade into mixed-script gibberish — one
-          // retry usually gets a coherent reply; never show garbage to the user.
-          console.error("chat model produced garbled output, retrying", {
-            preview: text.slice(0, 200),
-          });
-          const retry = await chatOnce();
-          const retryText =
-            "message" in retry && retry.message
-              ? stripReasoning(retry.message.content ?? "")
-              : "";
-          text =
-            retryText && !looksGarbled(retryText)
-              ? retryText
-              : "Sorry — that came out garbled on my end. Could you try asking again?";
+        const text = stripReasoning(message.content ?? "");
+        if (looksGarbled(text) || looksLikeReasoning(text)) {
+          // Free models occasionally degrade into mixed-script gibberish, or leak
+          // their planning ("we need to call create_plan...") as the final reply
+          // instead of acting. Retry once by just looping again on the same
+          // messages — if the model calls the tool properly this time, the
+          // normal tool-handling branch below picks it up.
+          if (badReplyRetries < 1) {
+            badReplyRetries++;
+            console.error("chat model produced a bad reply, retrying", {
+              preview: text.slice(0, 200),
+            });
+            continue;
+          }
+          finalText = "Sorry — I got stuck putting that together. Could you try asking again?";
+          break;
         }
         finalText = text;
         break;

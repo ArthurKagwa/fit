@@ -99,9 +99,9 @@ export function stripReasoning(text: string): string {
 /**
  * Detects garbled/corrupted free-model output: a degenerate generation that
  * mixes several unrelated scripts (Latin + Cyrillic + CJK + Hangul + Arabic in
- * one short reply) or is mostly not real word-shaped tokens. A reply that's
- * legitimately in one non-Latin language, or has an occasional loanword/emoji,
- * won't trip this — it looks for the *mixing*, not any one script.
+ * one short reply). A reply that's legitimately in one non-Latin language, or
+ * has an occasional loanword/emoji, won't trip this — it looks for the
+ * *mixing*, not any one script.
  */
 export function looksGarbled(text: string): boolean {
   const trimmed = text.trim();
@@ -124,6 +124,42 @@ export function looksGarbled(text: string): boolean {
     else if (cp >= 0xac00 && cp <= 0xd7a3) scripts.add("hangul");
   }
   return scripts.size >= 2;
+}
+
+/**
+ * Detects a reply that is actually the model's internal planning/reasoning
+ * rather than its final answer — plain English (no <think> tag, so
+ * stripReasoning() can't catch it) that narrates what it's about to do
+ * instead of doing it, e.g. "We need to use create_plan tool then
+ * summarize... Let's design...". Seen live from the free chat fleet.
+ *
+ * Two independent signals, either is sufficient:
+ *  - it says the literal snake_case name of one of our tools — a real
+ *    user-facing reply never does this (near-zero false-positive rate).
+ *  - 2+ lines open in first-person planning voice ("we need to", "let's",
+ *    "i should"...) — a single such phrase can appear in a legitimate
+ *    clarifying question, so this requires repetition to fire.
+ */
+const TOOL_NAMES = [
+  "create_plan",
+  "log_run",
+  "log_weight",
+  "log_meal",
+  "log_workout",
+  "save_goal",
+  "get_stats",
+  "list_recent_entries",
+];
+const PLANNING_VOICE = /^\s*(we|i)\s+(need to|should|must|will|'ll|could|can|are going to)\b/im;
+
+export function looksLikeReasoning(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 40) return false;
+
+  if (TOOL_NAMES.some((name) => new RegExp(`\\b${name}\\b`).test(trimmed))) return true;
+
+  const planningLines = trimmed.split(/\n+/).filter((line) => PLANNING_VOICE.test(line)).length;
+  return planningLines >= 2;
 }
 
 let client: OpenAI | null = null;
