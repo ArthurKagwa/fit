@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export function CopyMessageButton({ text, className }: { text: string; className?: string }) {
@@ -11,9 +12,10 @@ export function CopyMessageButton({ text, className }: { text: string; className
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast.success("Copied to clipboard");
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard permission denied/unavailable — nothing sensible to do
+      toast.error("Couldn't copy — try selecting the text instead.");
     }
   }
 
@@ -23,11 +25,12 @@ export function CopyMessageButton({ text, className }: { text: string; className
       aria-label={copied ? "Copied" : "Copy message"}
       onClick={copy}
       className={cn(
-        "text-muted-foreground/60 hover:text-foreground inline-flex items-center justify-center rounded-md p-1 transition-colors",
+        "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors active:scale-95",
         className
       )}
     >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+      {copied ? "Copied" : "Copy"}
     </button>
   );
 }
