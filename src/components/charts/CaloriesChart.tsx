@@ -8,6 +8,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 
+
 const config = {
   kcal: { label: "Calories", color: "var(--chart-3)" },
 } satisfies ChartConfig;
