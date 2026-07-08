@@ -21,10 +21,15 @@ export function DeleteEntryButton({
   type,
   id,
   label,
+  redirectTo,
+  iconOnly = true,
 }: {
   type: string;
   id: string;
   label: string;
+  /** Where to navigate after a successful delete. Defaults to refreshing the current page. */
+  redirectTo?: string;
+  iconOnly?: boolean;
 }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
@@ -38,20 +43,33 @@ export function DeleteEntryButton({
       return;
     }
     toast.success("Entry deleted");
-    router.refresh();
+    if (redirectTo) {
+      router.push(redirectTo);
+    } else {
+      router.refresh();
+    }
   }
 
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground hover:text-destructive size-7"
-          aria-label={`Delete ${label}`}
-        >
-          <Trash2 className="size-4" />
-        </Button>
+        {iconOnly ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-destructive size-7"
+            aria-label={`Delete ${label}`}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive flex-1"
+          >
+            <Trash2 className="size-4" /> Delete
+          </Button>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
