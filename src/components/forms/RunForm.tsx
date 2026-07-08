@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Footprints, ImageUp, Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -28,8 +28,7 @@ export function RunForm({ aiEnabled }: { aiEnabled: boolean }) {
 
   const [distanceKm, setDistanceKm] = useState("");
   const [duration, setDuration] = useState("");
-  const [date, setDate] = useState("");
-  useEffect(() => setDate(toDateInputValue()), []);
+  const [date, setDate] = useState(() => toDateInputValue());
   const [notes, setNotes] = useState("");
 
   function onPickFile(picked: File | null) {
@@ -184,11 +183,13 @@ export function RunForm({ aiEnabled }: { aiEnabled: boolean }) {
       </div>
       <div className="grid gap-2">
         <Label htmlFor="run-date">Date</Label>
+        {/* Local "today" can differ between server and client at render time */}
         <Input
           id="run-date"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
+          suppressHydrationWarning
           required
         />
       </div>

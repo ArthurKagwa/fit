@@ -277,6 +277,132 @@ export async function setPlanItemCompleted(userId: string, itemId: string, compl
   return result.count > 0;
 }
 
+// ---------- Updating ----------
+
+export const runUpdateSchema = z.object({
+  date: z.coerce.date().optional(),
+  distanceKm: z.coerce.number().positive().max(500).optional(),
+  durationSec: z.coerce.number().int().positive().max(24 * 3600).optional(),
+  notes: z.string().max(2000).nullish(),
+});
+export type RunUpdate = z.input<typeof runUpdateSchema>;
+
+export async function updateRun(userId: string, id: string, input: RunUpdate) {
+  const data = runUpdateSchema.parse(input);
+  const existing = await prisma.run.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  const distanceKm = data.distanceKm ?? existing.distanceKm;
+  const durationSec = data.durationSec ?? existing.durationSec;
+  return prisma.run.update({
+    where: { id: existing.id },
+    data: {
+      ...(data.date !== undefined && { date: data.date }),
+      distanceKm,
+      durationSec,
+      paceSecPerKm: Math.round(durationSec / distanceKm),
+      ...(data.notes !== undefined && { notes: data.notes }),
+    },
+  });
+}
+
+export const weightUpdateSchema = z.object({
+  date: z.coerce.date().optional(),
+  weightKg: z.coerce.number().positive().max(500).optional(),
+  note: z.string().max(1000).nullish(),
+});
+export type WeightUpdate = z.input<typeof weightUpdateSchema>;
+
+export async function updateWeight(userId: string, id: string, input: WeightUpdate) {
+  const data = weightUpdateSchema.parse(input);
+  const existing = await prisma.weightEntry.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  return prisma.weightEntry.update({
+    where: { id: existing.id },
+    data: {
+      ...(data.date !== undefined && { date: data.date }),
+      ...(data.weightKg !== undefined && { weightKg: data.weightKg }),
+      ...(data.note !== undefined && { note: data.note }),
+    },
+  });
+}
+
+export const mealUpdateSchema = z.object({
+  date: z.coerce.date().optional(),
+  mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
+  description: z.string().min(1).max(2000).optional(),
+  calories: z.coerce.number().int().min(0).max(10000).nullish(),
+  proteinG: z.coerce.number().min(0).max(1000).nullish(),
+  carbsG: z.coerce.number().min(0).max(1000).nullish(),
+  fatG: z.coerce.number().min(0).max(1000).nullish(),
+});
+export type MealUpdate = z.input<typeof mealUpdateSchema>;
+
+export async function updateMeal(userId: string, id: string, input: MealUpdate) {
+  const data = mealUpdateSchema.parse(input);
+  const existing = await prisma.meal.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  return prisma.meal.update({
+    where: { id: existing.id },
+    data: {
+      ...(data.date !== undefined && { date: data.date }),
+      ...(data.mealType !== undefined && { mealType: data.mealType }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.calories !== undefined && { calories: data.calories }),
+      ...(data.proteinG !== undefined && { proteinG: data.proteinG }),
+      ...(data.carbsG !== undefined && { carbsG: data.carbsG }),
+      ...(data.fatG !== undefined && { fatG: data.fatG }),
+    },
+  });
+}
+
+export const workoutUpdateSchema = z.object({
+  date: z.coerce.date().optional(),
+  type: z.enum(["strength", "cardio", "mobility", "sport", "other"]).optional(),
+  title: z.string().min(1).max(200).optional(),
+  notes: z.string().max(2000).nullish(),
+  exercises: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        sets: z.coerce.number().int().positive().max(100).nullish(),
+        reps: z.coerce.number().int().positive().max(1000).nullish(),
+        weightKg: z.coerce.number().min(0).max(1000).nullish(),
+      })
+    )
+    .max(50)
+    .optional(),
+});
+export type WorkoutUpdate = z.input<typeof workoutUpdateSchema>;
+
+export async function updateWorkout(userId: string, id: string, input: WorkoutUpdate) {
+  const data = workoutUpdateSchema.parse(input);
+  const existing = await prisma.workout.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  return prisma.workout.update({
+    where: { id: existing.id },
+    data: {
+      ...(data.date !== undefined && { date: data.date }),
+      ...(data.type !== undefined && { type: data.type }),
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.notes !== undefined && { notes: data.notes }),
+      // Exercises are replaced wholesale when provided
+      ...(data.exercises !== undefined && {
+        exercises: {
+          deleteMany: {},
+          create: data.exercises.map((e, order) => ({
+            name: e.name,
+            sets: e.sets ?? null,
+            reps: e.reps ?? null,
+            weightKg: e.weightKg ?? null,
+            order,
+          })),
+        },
+      }),
+    },
+    include: { exercises: { orderBy: { order: "asc" } } },
+  });
+}
+
 // ---------- Listing & deleting ----------
 
 export const ENTRY_TYPES = ["weight", "run", "meal", "workout"] as const;
@@ -306,6 +432,37 @@ export async function listEntries(userId: string, type: EntryType, options: List
       return prisma.meal.findMany(args);
     case "workout":
       return prisma.workout.findMany({ ...args, include: { exercises: { orderBy: { order: "asc" } } } });
+  }
+}
+
+export async function getEntry(userId: string, type: EntryType, id: string) {
+  const where = { id, userId };
+  switch (type) {
+    case "weight":
+      return prisma.weightEntry.findFirst({ where });
+    case "run":
+      return prisma.run.findFirst({ where });
+    case "meal":
+      return prisma.meal.findFirst({ where });
+    case "workout":
+      return prisma.workout.findFirst({
+        where,
+        include: { exercises: { orderBy: { order: "asc" } } },
+      });
+  }
+}
+
+/** Partial update; returns the updated entry or null when it isn't the user's. */
+export async function updateEntry(userId: string, type: EntryType, id: string, input: unknown) {
+  switch (type) {
+    case "weight":
+      return updateWeight(userId, id, input as WeightUpdate);
+    case "run":
+      return updateRun(userId, id, input as RunUpdate);
+    case "meal":
+      return updateMeal(userId, id, input as MealUpdate);
+    case "workout":
+      return updateWorkout(userId, id, input as WorkoutUpdate);
   }
 }
 

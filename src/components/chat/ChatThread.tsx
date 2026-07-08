@@ -113,7 +113,7 @@ export function ChatThread({
         window.history.replaceState(null, "", `/chat?c=${data.conversationId}`);
       }
       for (const saved of data.savedEntries ?? []) {
-        toast.success(`Saved: ${saved.label}`);
+        toast.success(saved.label);
       }
       if (data.savedEntries?.length) router.refresh();
     } finally {

@@ -2,15 +2,36 @@
 
 import { toast } from "sonner";
 
+type EntryType = "weight" | "run" | "meal" | "workout";
+
 /** POSTs a new entry and returns true on success (with a toast either way). */
 export async function submitEntry(
-  type: "weight" | "run" | "meal" | "workout",
+  type: EntryType,
+  payload: unknown,
+  successMessage: string
+): Promise<boolean> {
+  return sendEntry(`/api/entries/${type}`, "POST", payload, successMessage);
+}
+
+/** PATCHes an existing entry and returns true on success (with a toast either way). */
+export async function patchEntry(
+  type: EntryType,
+  id: string,
+  payload: unknown,
+  successMessage: string
+): Promise<boolean> {
+  return sendEntry(`/api/entries/${type}/${id}`, "PATCH", payload, successMessage);
+}
+
+async function sendEntry(
+  url: string,
+  method: "POST" | "PATCH",
   payload: unknown,
   successMessage: string
 ): Promise<boolean> {
   try {
-    const res = await fetch(`/api/entries/${type}`, {
-      method: "POST",
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
