@@ -47,7 +47,7 @@ export default async function HistoryEntryPage({
         <ArrowLeft className="size-4" /> Back to history
       </Link>
 
-      <header className="flex items-center gap-3">
+      <header className="flex min-w-0 items-center gap-3">
         <div className="bg-muted text-muted-foreground flex size-11 shrink-0 items-center justify-center rounded-lg">
           <Icon className="size-5" />
         </div>
