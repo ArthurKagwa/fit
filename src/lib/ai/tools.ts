@@ -6,9 +6,16 @@ import {
   createRun,
   createWeight,
   createWorkout,
+  deleteEntry,
+  getEntry,
   listEntries,
   saveGoal,
+  updateMeal,
+  updateRun,
+  updateWeight,
+  updateWorkout,
   ENTRY_TYPES,
+  type EntryType,
 } from "@/lib/data";
 import { getStatsSummary, statsToPromptText } from "@/lib/stats";
 import { formatDuration, parseDuration } from "@/lib/format";
@@ -182,6 +189,77 @@ export const toolDefinitions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "update_entry",
+      description:
+        "Correct an already-logged entry (run, weight, meal or workout). Find the entry id with list_recent_entries first, then pass ONLY the fields that change — everything else keeps its value. Use this for corrections; never log a duplicate to fix a mistake.",
+      parameters: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: [...ENTRY_TYPES] },
+          id: { type: "string", description: "Entry id from list_recent_entries" },
+          date: { type: "string", description: "YYYY-MM-DD" },
+          distance_km: { type: "number", description: "Runs only" },
+          duration: {
+            type: "string",
+            description: 'Runs only, as "26:10" (mm:ss) or "1:02:45" (h:mm:ss)',
+          },
+          weight_kg: { type: "number", description: "Weight entries only" },
+          meal_type: {
+            type: "string",
+            enum: ["breakfast", "lunch", "dinner", "snack"],
+            description: "Meals only",
+          },
+          description: { type: "string", description: "Meals only" },
+          calories: { type: "integer", description: "Meals only" },
+          protein_g: { type: "number", description: "Meals only" },
+          carbs_g: { type: "number", description: "Meals only" },
+          fat_g: { type: "number", description: "Meals only" },
+          title: { type: "string", description: "Workouts only" },
+          workout_type: {
+            type: "string",
+            enum: ["strength", "cardio", "mobility", "sport", "other"],
+            description: "Workouts only",
+          },
+          exercises: {
+            type: "array",
+            description:
+              "Workouts only. Replaces ALL exercises on the workout — pass the complete corrected list, not just the changed one.",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                sets: { type: "integer" },
+                reps: { type: "integer" },
+                weight_kg: { type: "number" },
+              },
+              required: ["name"],
+            },
+          },
+          notes: { type: "string", description: "Free-text note on the entry" },
+        },
+        required: ["type", "id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_entry",
+      description:
+        "Permanently delete a logged entry. Only call this after the user has confirmed exactly which entry to remove — find it with list_recent_entries and echo it back to them first.",
+      parameters: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: [...ENTRY_TYPES] },
+          id: { type: "string", description: "Entry id from list_recent_entries" },
+        },
+        required: ["type", "id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "list_recent_entries",
       description: "List the user's recent entries of one type, newest first.",
       parameters: {
@@ -229,7 +307,7 @@ export async function executeTool(
       });
       return {
         content: JSON.stringify({ ok: true, id: run.id, paceSecPerKm: run.paceSecPerKm }),
-        saved: { type: "run", label: `${run.distanceKm} km run · ${formatDuration(run.durationSec)}` },
+        saved: { type: "run", label: `Run logged: ${run.distanceKm} km · ${formatDuration(run.durationSec)}` },
       };
     }
 
@@ -245,7 +323,7 @@ export async function executeTool(
       });
       return {
         content: JSON.stringify({ ok: true, id: entry.id }),
-        saved: { type: "weight", label: `${entry.weightKg} kg` },
+        saved: { type: "weight", label: `Weight logged: ${entry.weightKg} kg` },
       };
     }
 
@@ -277,7 +355,7 @@ export async function executeTool(
         content: JSON.stringify({ ok: true, id: meal.id }),
         saved: {
           type: "meal",
-          label: `${meal.description}${meal.calories != null ? ` · ~${meal.calories} kcal` : ""}`,
+          label: `Meal logged: ${meal.description}${meal.calories != null ? ` · ~${meal.calories} kcal` : ""}`,
         },
       };
     }
@@ -316,7 +394,7 @@ export async function executeTool(
       });
       return {
         content: JSON.stringify({ ok: true, id: workout.id, exercises: workout.exercises.length }),
-        saved: { type: "workout", label: workout.title },
+        saved: { type: "workout", label: `Workout logged: ${workout.title}` },
       };
     }
 
@@ -339,7 +417,7 @@ export async function executeTool(
       });
       return {
         content: JSON.stringify({ ok: true, id: goal.id }),
-        saved: { type: "goal", label: goal.description ?? `${goal.type}: ${goal.targetValue} ${goal.unit}` },
+        saved: { type: "goal", label: `Goal set: ${goal.description ?? `${goal.targetValue} ${goal.unit}`}` },
       };
     }
 
@@ -372,13 +450,142 @@ export async function executeTool(
       });
       return {
         content: JSON.stringify({ ok: true, id: plan.id, items: plan.items.length }),
-        saved: { type: "plan", label: plan.title },
+        saved: { type: "plan", label: `Plan created: ${plan.title}` },
       };
     }
 
     case "get_stats": {
       const stats = await getStatsSummary(userId);
       return { content: statsToPromptText(stats) };
+    }
+
+    case "update_entry": {
+      const a = z
+        .object({
+          type: z.enum(ENTRY_TYPES),
+          id: z.string(),
+          date: dateArg,
+          distance_km: z.coerce.number().optional(),
+          duration: z.string().optional(),
+          weight_kg: z.coerce.number().optional(),
+          meal_type: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
+          description: z.string().optional(),
+          calories: z.coerce.number().optional(),
+          protein_g: z.coerce.number().optional(),
+          carbs_g: z.coerce.number().optional(),
+          fat_g: z.coerce.number().optional(),
+          title: z.string().optional(),
+          workout_type: z.enum(["strength", "cardio", "mobility", "sport", "other"]).optional(),
+          exercises: z
+            .array(
+              z.object({
+                name: z.string(),
+                sets: z.coerce.number().optional(),
+                reps: z.coerce.number().optional(),
+                weight_kg: z.coerce.number().optional(),
+              })
+            )
+            .optional(),
+          notes: z.string().optional(),
+        })
+        .parse(args);
+
+      switch (a.type) {
+        case "run": {
+          let durationSec: number | undefined;
+          if (a.duration !== undefined) {
+            const parsed = parseDuration(a.duration);
+            if (!parsed) {
+              return {
+                content: JSON.stringify({ error: `could not parse duration "${a.duration}"` }),
+              };
+            }
+            durationSec = parsed;
+          }
+          const run = await updateRun(userId, a.id, {
+            distanceKm: a.distance_km,
+            durationSec,
+            date: a.date,
+            notes: a.notes,
+          });
+          if (!run) return { content: JSON.stringify({ error: "entry not found" }) };
+          return {
+            content: JSON.stringify({ ok: true, id: run.id, paceSecPerKm: run.paceSecPerKm }),
+            saved: {
+              type: "run",
+              label: `Run updated: ${run.distanceKm} km · ${formatDuration(run.durationSec)}`,
+            },
+          };
+        }
+        case "weight": {
+          const entry = await updateWeight(userId, a.id, {
+            weightKg: a.weight_kg,
+            date: a.date,
+            note: a.notes,
+          });
+          if (!entry) return { content: JSON.stringify({ error: "entry not found" }) };
+          return {
+            content: JSON.stringify({ ok: true, id: entry.id }),
+            saved: { type: "weight", label: `Weight updated: ${entry.weightKg} kg` },
+          };
+        }
+        case "meal": {
+          const meal = await updateMeal(userId, a.id, {
+            mealType: a.meal_type,
+            description: a.description,
+            calories: a.calories,
+            proteinG: a.protein_g,
+            carbsG: a.carbs_g,
+            fatG: a.fat_g,
+            date: a.date,
+          });
+          if (!meal) return { content: JSON.stringify({ error: "entry not found" }) };
+          return {
+            content: JSON.stringify({ ok: true, id: meal.id }),
+            saved: {
+              type: "meal",
+              label: `Meal updated: ${meal.description}${meal.calories != null ? ` · ~${meal.calories} kcal` : ""}`,
+            },
+          };
+        }
+        case "workout": {
+          const workout = await updateWorkout(userId, a.id, {
+            title: a.title,
+            type: a.workout_type,
+            date: a.date,
+            notes: a.notes,
+            exercises: a.exercises?.map((e) => ({
+              name: e.name,
+              sets: e.sets,
+              reps: e.reps,
+              weightKg: e.weight_kg,
+            })),
+          });
+          if (!workout) return { content: JSON.stringify({ error: "entry not found" }) };
+          return {
+            content: JSON.stringify({ ok: true, id: workout.id }),
+            saved: { type: "workout", label: `Workout updated: ${workout.title}` },
+          };
+        }
+      }
+      break;
+    }
+
+    case "delete_entry": {
+      const a = z.object({ type: z.enum(ENTRY_TYPES), id: z.string() }).parse(args);
+      const entry = await getEntry(userId, a.type, a.id);
+      if (!entry) return { content: JSON.stringify({ error: "entry not found" }) };
+      await deleteEntry(userId, a.type, a.id);
+      const labels: Record<EntryType, string> = {
+        weight: "Weight entry",
+        run: "Run",
+        meal: "Meal",
+        workout: "Workout",
+      };
+      return {
+        content: JSON.stringify({ ok: true }),
+        saved: { type: a.type, label: `${labels[a.type]} deleted` },
+      };
     }
 
     case "list_recent_entries": {
@@ -397,7 +604,15 @@ export async function executeTool(
           return { ...base, km: e.distanceKm, duration: formatDuration(e.durationSec) };
         if ("mealType" in e)
           return { ...base, meal: e.mealType, description: e.description, kcal: e.calories };
-        if ("title" in e) return { ...base, title: e.title };
+        if ("title" in e && "exercises" in e)
+          return {
+            ...base,
+            title: e.title,
+            exercises: e.exercises.map(
+              (x) =>
+                `${x.name}${x.sets != null && x.reps != null ? ` ${x.sets}x${x.reps}` : ""}${x.weightKg != null ? ` @${x.weightKg}kg` : ""}`
+            ),
+          };
         return base;
       });
       return { content: JSON.stringify(compact) };

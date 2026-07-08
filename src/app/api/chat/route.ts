@@ -189,7 +189,7 @@ export async function POST(request: Request) {
     if (!finalText) {
       finalText =
         savedEntries.length > 0
-          ? `Saved: ${savedEntries.map((s) => s.label).join("; ")}.`
+          ? `${savedEntries.map((s) => s.label).join("; ")}.`
           : "Sorry — I could not finish that. Try rephrasing?";
     }
 

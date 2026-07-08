@@ -9,11 +9,12 @@ import {
 import { redirect } from "next/navigation";
 import { getUserId } from "@/lib/session";
 import { listEntries, ENTRY_TYPES, type EntryType } from "@/lib/data";
-import { formatDate, formatDuration, formatPace } from "@/lib/format";
+import { formatDate, formatDuration, formatPace, toDateInputValue } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/EmptyState";
 import { DeleteEntryButton } from "@/components/history/DeleteEntryButton";
+import { EditEntryButton, type EditableEntry } from "@/components/history/EditEntrySheet";
 import { cn } from "@/lib/utils";
 
 type Filter = "all" | EntryType;
@@ -33,6 +34,7 @@ type Item = {
   title: string;
   detail: string | null;
   badge: string | null;
+  edit: EditableEntry;
 };
 
 function toItems(type: EntryType, entries: Awaited<ReturnType<typeof listEntries>>): Item[] {
@@ -47,6 +49,13 @@ function toItems(type: EntryType, entries: Awaited<ReturnType<typeof listEntries
           title: `${e.weightKg.toFixed(1)} kg`,
           detail: e.note,
           badge: null,
+          edit: {
+            type,
+            id: e.id,
+            date: toDateInputValue(e.date),
+            weightKg: e.weightKg,
+            note: e.note,
+          },
         };
       }
       case "run": {
@@ -58,10 +67,21 @@ function toItems(type: EntryType, entries: Awaited<ReturnType<typeof listEntries
           title: `${e.distanceKm} km run · ${formatDuration(e.durationSec)}`,
           detail: e.notes,
           badge: e.paceSecPerKm ? formatPace(e.paceSecPerKm) : null,
+          edit: {
+            type,
+            id: e.id,
+            date: toDateInputValue(e.date),
+            distanceKm: e.distanceKm,
+            durationSec: e.durationSec,
+            notes: e.notes,
+          },
         };
       }
       case "meal": {
-        const e = entry as Extract<typeof entry, { mealType: string; description: string }>;
+        const e = entry as Extract<
+          typeof entry,
+          { mealType: string; description: string }
+        >;
         return {
           type,
           id: e.id,
@@ -76,10 +96,27 @@ function toItems(type: EntryType, entries: Awaited<ReturnType<typeof listEntries
               .filter(Boolean)
               .join(" · ") || null,
           badge: e.calories != null ? `${e.calories} kcal` : e.mealType,
+          edit: {
+            type,
+            id: e.id,
+            date: toDateInputValue(e.date),
+            mealType: e.mealType,
+            description: e.description,
+            calories: e.calories,
+            proteinG: e.proteinG,
+            carbsG: e.carbsG,
+            fatG: e.fatG,
+          },
         };
       }
       case "workout": {
-        const e = entry as Extract<typeof entry, { title: string; exercises: { name: string }[] }>;
+        const e = entry as Extract<
+          typeof entry,
+          {
+            title: string;
+            exercises: { name: string; sets: number | null; reps: number | null; weightKg: number | null }[];
+          }
+        >;
         return {
           type,
           id: e.id,
@@ -87,6 +124,20 @@ function toItems(type: EntryType, entries: Awaited<ReturnType<typeof listEntries
           title: e.title,
           detail: e.exercises.map((x) => x.name).join(", ") || e.notes,
           badge: e.type,
+          edit: {
+            type,
+            id: e.id,
+            date: toDateInputValue(e.date),
+            title: e.title,
+            workoutType: e.type,
+            notes: e.notes,
+            exercises: e.exercises.map((x) => ({
+              name: x.name,
+              sets: x.sets,
+              reps: x.reps,
+              weightKg: x.weightKg,
+            })),
+          },
         };
       }
     }
@@ -181,11 +232,14 @@ export default async function HistoryPage({
                       {item.badge}
                     </Badge>
                   )}
-                  <DeleteEntryButton
-                    type={item.type}
-                    id={item.id}
-                    label={typeLabel[item.type]}
-                  />
+                  <div className="flex shrink-0 items-center">
+                    <EditEntryButton entry={item.edit} label={typeLabel[item.type]} />
+                    <DeleteEntryButton
+                      type={item.type}
+                      id={item.id}
+                      label={typeLabel[item.type]}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             );
