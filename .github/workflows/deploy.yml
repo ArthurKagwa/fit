@@ -1,0 +1,27 @@
+name: deploy
+
+# Push-triggered deploy. A self-hosted runner on the deployment machine
+# (systemd --user fit-runner.service) picks up this job and runs the local
+# deploy script, which fast-forwards /home/maestro27/dev/fit to origin/main,
+# installs deps, runs migrations, and restarts fit-app.service.
+#
+# Works no matter where the push comes from — the trigger is the push event
+# on GitHub, not any local git activity.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Never run two deploys at once; let an in-flight one finish, then run the newest.
+concurrency:
+  group: fit-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, fit-deploy]
+    timeout-minutes: 20
+    steps:
+      - name: Deploy latest main
+        run: /home/maestro27/.local/bin/fit-update.sh
