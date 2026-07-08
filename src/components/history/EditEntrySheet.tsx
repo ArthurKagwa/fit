@@ -58,20 +58,34 @@ export type EditableEntry =
       exercises: { name: string; sets: number | null; reps: number | null; weightKg: number | null }[];
     };
 
-export function EditEntryButton({ entry, label }: { entry: EditableEntry; label: string }) {
+export function EditEntryButton({
+  entry,
+  label,
+  iconOnly = true,
+}: {
+  entry: EditableEntry;
+  label: string;
+  iconOnly?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground hover:text-foreground size-7"
-          aria-label={`Edit ${label}`}
-        >
-          <Pencil className="size-4" />
-        </Button>
+        {iconOnly ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground size-7"
+            aria-label={`Edit ${label}`}
+          >
+            <Pencil className="size-4" />
+          </Button>
+        ) : (
+          <Button variant="outline" className="flex-1">
+            <Pencil className="size-4" /> Edit
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto">
         <SheetHeader>
