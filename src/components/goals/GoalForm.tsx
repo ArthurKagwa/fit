@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+
 const goalTypes = [
   { value: "TARGET_WEIGHT", label: "Target weight", unit: "kg", placeholder: "78" },
   { value: "WEEKLY_DISTANCE", label: "Weekly running distance", unit: "km", placeholder: "20" },
