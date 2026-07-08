@@ -47,7 +47,7 @@ export function DeleteEntryButton({
         <Button
           variant="ghost"
           size="icon"
-          className="text-muted-foreground hover:text-destructive size-8"
+          className="text-muted-foreground hover:text-destructive size-7"
           aria-label={`Delete ${label}`}
         >
           <Trash2 className="size-4" />

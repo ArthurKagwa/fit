@@ -67,7 +67,7 @@ export function EditEntryButton({ entry, label }: { entry: EditableEntry; label:
         <Button
           variant="ghost"
           size="icon"
-          className="text-muted-foreground hover:text-foreground size-8"
+          className="text-muted-foreground hover:text-foreground size-7"
           aria-label={`Edit ${label}`}
         >
           <Pencil className="size-4" />
