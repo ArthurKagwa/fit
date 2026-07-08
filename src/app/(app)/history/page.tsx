@@ -215,8 +215,8 @@ export default async function HistoryPage({
           {items.map((item) => {
             const Icon = typeIcon[item.type];
             return (
-              <Card key={`${item.type}-${item.id}`} className="py-3">
-                <CardContent className="flex items-center gap-3 px-3">
+              <Card key={`${item.type}-${item.id}`} className="min-w-0 overflow-hidden py-3">
+                <CardContent className="flex min-w-0 items-center gap-2 px-3">
                   <div className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
                     <Icon className="size-4.5" />
                   </div>
@@ -228,7 +228,7 @@ export default async function HistoryPage({
                     </p>
                   </div>
                   {item.badge && (
-                    <Badge variant="secondary" className="shrink-0">
+                    <Badge variant="secondary" className="shrink-0 px-2">
                       {item.badge}
                     </Badge>
                   )}
