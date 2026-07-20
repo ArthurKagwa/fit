@@ -16,6 +16,7 @@ function shortDate(value: string | number) {
   return new Date(String(value)).toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
+    timeZone: "UTC",
   });
 }
 

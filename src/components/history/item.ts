@@ -6,7 +6,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { listEntries, EntryType } from "@/lib/data";
-import { formatDuration, formatPace, toDateInputValue } from "@/lib/format";
+import { formatDuration, formatPace, toDateKey } from "@/lib/format";
 import type { EditableEntry } from "@/components/history/EditEntrySheet";
 
 export type Item = {
@@ -35,7 +35,7 @@ export function toItem(type: EntryType, entry: Entry): Item {
         edit: {
           type,
           id: e.id,
-          date: toDateInputValue(e.date),
+          date: toDateKey(e.date),
           weightKg: e.weightKg,
           note: e.note,
         },
@@ -53,7 +53,7 @@ export function toItem(type: EntryType, entry: Entry): Item {
         edit: {
           type,
           id: e.id,
-          date: toDateInputValue(e.date),
+          date: toDateKey(e.date),
           distanceKm: e.distanceKm,
           durationSec: e.durationSec,
           notes: e.notes,
@@ -79,7 +79,7 @@ export function toItem(type: EntryType, entry: Entry): Item {
         edit: {
           type,
           id: e.id,
-          date: toDateInputValue(e.date),
+          date: toDateKey(e.date),
           mealType: e.mealType,
           description: e.description,
           calories: e.calories,
@@ -107,7 +107,7 @@ export function toItem(type: EntryType, entry: Entry): Item {
         edit: {
           type,
           id: e.id,
-          date: toDateInputValue(e.date),
+          date: toDateKey(e.date),
           title: e.title,
           workoutType: e.type,
           notes: e.notes,

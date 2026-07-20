@@ -9,23 +9,27 @@ import { formatDuration, formatPace } from "@/lib/format";
 
 const DAY = 24 * 60 * 60 * 1000;
 
+// Date-only entries are stored at UTC midnight (see lib/format.ts), so all
+// day/week bucketing works in UTC too. Using local-time methods here would
+// shift an entry into the previous day — and, at a week boundary, the
+// previous week — on any runtime west of UTC.
 function startOfDay(d: Date): Date {
   const copy = new Date(d);
-  copy.setHours(0, 0, 0, 0);
+  copy.setUTCHours(0, 0, 0, 0);
   return copy;
 }
 
-/** Monday 00:00 of the week containing d. */
+/** Monday 00:00 UTC of the week containing d. */
 function startOfWeek(d: Date): Date {
   const day = startOfDay(d);
-  const dow = (day.getDay() + 6) % 7; // 0 = Monday
+  const dow = (day.getUTCDay() + 6) % 7; // 0 = Monday
   return new Date(day.getTime() - dow * DAY);
 }
 
 function dayKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
 

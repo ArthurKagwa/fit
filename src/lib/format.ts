@@ -24,11 +24,17 @@ export function parseDuration(text: string): number | null {
   return null;
 }
 
+// Date-only entries (runs, meals, weights, workouts) are stored at UTC
+// midnight — a "YYYY-MM-DD" the user picked becomes `new Date("YYYY-MM-DD")`,
+// which JS parses as UTC. So we must read those instants back in UTC too,
+// otherwise a runtime west of UTC renders them as the previous calendar day
+// (and can group them into the previous week).
 export function formatDate(date: Date | string): string {
   return new Date(date).toLocaleDateString(undefined, {
     weekday: "short",
     day: "numeric",
     month: "short",
+    timeZone: "UTC",
   });
 }
 
@@ -38,13 +44,23 @@ export function formatDateTime(date: Date | string): string {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "UTC",
   });
 }
 
-/** Local YYYY-MM-DD for <input type="date"> defaults. */
+/** Local YYYY-MM-DD, for defaulting <input type="date"> to the user's today. */
 export function toDateInputValue(date: Date = new Date()): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+/** UTC YYYY-MM-DD, for reading a stored (UTC-midnight) date back into a form. */
+export function toDateKey(date: Date | string): string {
+  const d = new Date(date);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }
